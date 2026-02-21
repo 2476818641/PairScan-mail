@@ -1,0 +1,17 @@
+database:
+  use_remote_mysql: false
+  host: "127.0.0.1"
+  port: 3306
+  user: "your_mysql_user"
+  password: "your_mysql_password"
+  dbname: "blacklist_db"
+  sqlite_db_path: "./blacklist.db"
+  batchSize: 1000
+  mysql_batch_size: 20000
+  sqlite_batch_size: 5000
+proxy:
+  enabled: false
+  type: "socks5"
+  address: "127.0.0.1:1080"
+files:
+  output_log: "log-ts.txt"

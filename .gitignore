@@ -1,0 +1,48 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+main.exe
+main
+sieve
+
+# Test binary
+*.test
+
+# Output files
+*.out
+
+# Go workspace files
+go.work
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+log-*.txt
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+output/
+
+# Environment files
+.env
+.env.local
