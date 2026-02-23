@@ -9,6 +9,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func getDBTypeFromString(s string) DBType {
+	switch strings.ToLower(s) {
+	case "mysql":
+		return DBTypeMySQL
+	case "postgres", "postgresql":
+		return DBTypePostgres
+	case "sqlite", "":
+		return DBTypeSQLite
+	default:
+		return DBTypeSQLite
+	}
+}
+
 // ============================================
 // 常量定义
 // ============================================
@@ -30,18 +43,47 @@ type Config struct {
 	Files    FileConfig  `yaml:"files"`
 }
 
+// DBType 数据库类型
+type DBType string
+
+const (
+	DBTypeSQLite   DBType = "sqlite"
+	DBTypeMySQL    DBType = "mysql"
+	DBTypePostgres DBType = "postgres"
+)
+
 // DBConfig holds all database-related settings.
 type DBConfig struct {
-	UseRemoteMySQL  bool   `yaml:"use_remote_mysql"`
-	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
-	User            string `yaml:"user"`
-	Password        string `yaml:"password"`
-	DBName          string `yaml:"dbname"`
-	SQLiteDBPath    string `yaml:"sqlite_db_path"`
-	BatchSize       int    `yaml:"batch_size"`
-	MySQLBatchSize  int    `yaml:"mysql_batch_size"`
-	SQLiteBatchSize int    `yaml:"sqlite_batch_size"`
+	DBType            DBType `yaml:"db_type"`
+	Host              string `yaml:"host"`
+	Port              int    `yaml:"port"`
+	User              string `yaml:"user"`
+	Password          string `yaml:"password"`
+	DBName            string `yaml:"dbname"`
+	SQLiteDBPath      string `yaml:"sqlite_db_path"`
+	SSLMode           string `yaml:"ssl_mode"`
+	BatchSize         int    `yaml:"batch_size"`
+	MySQLBatchSize    int    `yaml:"mysql_batch_size"`
+	SQLiteBatchSize   int    `yaml:"sqlite_batch_size"`
+	PostgresBatchSize int    `yaml:"postgres_batch_size"`
+}
+
+// GetDBType 获取当前数据库类型
+func (dbc DBConfig) GetDBType() DBType {
+	if dbc.DBType == "" {
+		return DBTypeSQLite
+	}
+	return dbc.DBType
+}
+
+// UseRemotePostgreSQL 是否使用远程PostgreSQL
+func (dbc DBConfig) UseRemotePostgreSQL() bool {
+	return dbc.GetDBType() == DBTypePostgres
+}
+
+// UseRemoteMySQL 是否使用远程MySQL（向后兼容）
+func (dbc DBConfig) UseRemoteMySQL() bool {
+	return dbc.GetDBType() == DBTypeMySQL
 }
 
 // ProxyConfig holds proxy settings.
@@ -58,11 +100,16 @@ type FileConfig struct {
 
 // GetConfigBatchSize selects the appropriate batch size based on the current database.
 func (dbc DBConfig) GetConfigBatchSize() int {
-	if dbc.UseRemoteMySQL {
+	switch dbc.GetDBType() {
+	case DBTypeMySQL:
 		if dbc.MySQLBatchSize > 0 {
 			return dbc.MySQLBatchSize
 		}
-	} else {
+	case DBTypePostgres:
+		if dbc.PostgresBatchSize > 0 {
+			return dbc.PostgresBatchSize
+		}
+	case DBTypeSQLite:
 		if dbc.SQLiteBatchSize > 0 {
 			return dbc.SQLiteBatchSize
 		}
@@ -92,8 +139,8 @@ func Load(path string) (Config, error) {
 	applyDefaults(&cfg)
 	applyEnvironmentOverrides(&cfg)
 
-	// Ensure SQLite directory exists
-	if !cfg.Database.UseRemoteMySQL && cfg.Database.SQLiteDBPath != "" {
+	dbType := cfg.Database.GetDBType()
+	if dbType == DBTypeSQLite && cfg.Database.SQLiteDBPath != "" {
 		dbDir := filepath.Dir(cfg.Database.SQLiteDBPath)
 		if dbDir != "." && dbDir != "" {
 			if err := os.MkdirAll(dbDir, 0755); err != nil {
@@ -106,6 +153,9 @@ func Load(path string) (Config, error) {
 
 // applyDefaults sets sane defaults for missing configuration values.
 func applyDefaults(cfg *Config) {
+	if cfg.Database.DBType == "" {
+		cfg.Database.DBType = DBTypeSQLite
+	}
 	if cfg.Database.BatchSize <= 0 {
 		cfg.Database.BatchSize = 1000
 	}
@@ -115,6 +165,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Database.SQLiteBatchSize <= 0 {
 		cfg.Database.SQLiteBatchSize = cfg.Database.BatchSize
 	}
+	if cfg.Database.PostgresBatchSize <= 0 {
+		cfg.Database.PostgresBatchSize = cfg.Database.BatchSize
+	}
+	if cfg.Database.SSLMode == "" {
+		cfg.Database.SSLMode = "disable"
+	}
 	// 设置默认代理类型
 	if cfg.Proxy.Enabled && cfg.Proxy.Type == "" {
 		cfg.Proxy.Type = "socks5"
@@ -123,17 +179,21 @@ func applyDefaults(cfg *Config) {
 
 // applyEnvironmentOverrides applies environment variable overrides to the configuration.
 // Supported environment variables:
-// - DB_HOST: Override MySQL host
-// - DB_PORT: Override MySQL port
-// - DB_USER: Override MySQL user
-// - DB_PASSWORD: Override MySQL password
-// - DB_NAME: Override MySQL database name
+// - DB_TYPE: Override database type (sqlite, mysql, postgres)
+// - DB_HOST: Override database host
+// - DB_PORT: Override database port
+// - DB_USER: Override database user
+// - DB_PASSWORD: Override database password
+// - DB_NAME: Override database name
 // - SQLITE_PATH: Override SQLite database path
 // - PROXY_ENABLED: Enable/disable proxy (true/false)
 // - PROXY_TYPE: Override proxy type
 // - PROXY_ADDRESS: Override proxy address
 // - OUTPUT_LOG: Override output log file path
 func applyEnvironmentOverrides(cfg *Config) {
+	if dbType := os.Getenv("DB_TYPE"); dbType != "" {
+		cfg.Database.DBType = getDBTypeFromString(dbType)
+	}
 	if host := os.Getenv("DB_HOST"); host != "" {
 		cfg.Database.Host = host
 	}
@@ -179,44 +239,54 @@ func createDefaultConfig(path string) error {
 # ============================================
 # PairScan 配置文件
 # ============================================
-# 
+#
 # 说明：
 # 1. 可以直接修改此文件，或使用环境变量覆盖（推荐用于敏感信息）
 # 2. 支持的环境变量：
-#    - DB_PASSWORD: 覆盖 MySQL 密码
-#    - DB_HOST: 覆盖 MySQL 主机
-#    - DB_PORT: 覆盖 MySQL 端口
-#    - DB_USER: 覆盖 MySQL 用户名
-#    - DB_NAME: 覆盖 MySQL 数据库名
+#    - DB_PASSWORD: 覆盖数据库密码
+#    - DB_HOST: 覆盖数据库主机
+#    - DB_PORT: 覆盖数据库端口
+#    - DB_USER: 覆盖数据库用户名
+#    - DB_NAME: 覆盖数据库名
 #    - SQLITE_PATH: 覆盖 SQLite 路径
 #    - PROXY_ENABLED: 覆盖代理启用状态 (true/false)
 #    - PROXY_ADDRESS: 覆盖代理地址
 #    - OUTPUT_LOG: 覆盖输出日志文件路径
-# 3. batch_size, mysql_batch_size, sqlite_batch_size 说明：
+# 3. 批量插入大小配置说明：
 #    - batch_size: 通用默认批量大小（值 ≤ 0 表示不设置，使用默认值）
 #    - mysql_batch_size: MySQL 数据库专用批量大小（值 ≤ 0 表示不设置，使用 batch_size）
+#    - postgres_batch_size: PostgreSQL 数据库专用批量大小（值 ≤ 0 表示不设置，使用 batch_size）
 #    - sqlite_batch_size: SQLite 数据库专用批量大小（值 ≤ 0 表示不设置，使用 batch_size）
 
 # ============================================
 # 数据库配置
 # ============================================
 database:
-  # 是否使用远程 MySQL
-  use_remote_mysql: false
-  
+  # 数据库类型: sqlite, mysql, postgres
+  db_type: "sqlite"
+
   # MySQL 配置（仅在使用 MySQL 时需要）
   host: "127.0.0.1"
   port: 3306
   user: "your_mysql_user"
   password: "your_mysql_password"  # 提示: 可通过环境变量 DB_PASSWORD 覆盖
   dbname: "blacklist_db"
-  
+
+  # PostgreSQL 配置（仅在使用 PostgreSQL 时需要）
+  # host: "127.0.0.1"
+  # port: 5432
+  # user: "your_postgres_user"
+  # password: "your_postgres_password"
+  # dbname: "blacklist_db"
+  # ssl_mode: "disable"
+
   # SQLite 配置（默认使用）
   sqlite_db_path: "./blacklist.db"  # 提示: 可通过环境变量 SQLITE_PATH 覆盖
-  
+
   # 批量插入大小配置
   batch_size: 1000           # 默认批量大小
   mysql_batch_size: 20000    # MySQL 专用批量大小（建议值）
+  postgres_batch_size: 10000 # PostgreSQL 专用批量大小（建议值）
   sqlite_batch_size: 5000    # SQLite 专用批量大小（建议值）
 
 # ============================================

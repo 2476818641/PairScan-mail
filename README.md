@@ -14,7 +14,8 @@ PairScan-mail 是一个高效的邮件日志数据处理工具，专门用于扫
 - 多数据库支持：
   - SQLite（本地）
   - MySQL（远程）
-- 布隆过滤器优化：减少远程 MySQL 查询次数，提升去重性能
+  - PostgreSQL（远程）
+- 布隆过滤器优化：减少远程 MySQL/PostgreSQL 查询次数，提升去重性能
 - 美观的终端用户界面（TUI）：实时显示处理进度、统计信息
 
 ## 快速开始
@@ -34,17 +35,43 @@ go build -o PairScan-mail
 
 ### 配置
 
-编辑 `config.yaml` 文件：
+ 编辑 `config.yaml` 文件：
 
 ```yaml
 database:
-  use_remote_mysql: false    # 是否使用远程 MySQL
-  host: "127.0.0.1"
-  port: 3306
-  user: "your_mysql_user"
-  password: "your_mysql_password"
-  dbname: "blacklist_db"
+  db_type: "sqlite"           # 数据库类型: sqlite, mysql, postgres
+  
+  # SQLite 配置（默认使用）
   sqlite_db_path: "./blacklist.db"
+  
+  # MySQL 配置（仅在使用 MySQL 时需要）
+  # db_type: "mysql"
+  # host: "127.0.0.1"
+  # port: 3306
+  # user: "your_mysql_user"
+  # password: "your_mysql_password"
+  # dbname: "blacklist_db"
+  
+  # PostgreSQL 配置（仅在使用 PostgreSQL 时需要）
+  # db_type: "postgres"
+  # host: "127.0.0.1"
+  # port: 5432
+  # user: "your_postgres_user"
+  # password: "your_postgres_password"
+  # dbname: "blacklist_db"
+  # ssl_mode: "disable"
+```
+
+**使用环境变量（推荐用于敏感信息）：**
+
+```bash
+# Linux/Mac
+export DB_TYPE="postgres"
+export DB_PASSWORD="your_password"
+
+# Windows
+set DB_TYPE=postgres
+set DB_PASSWORD=your_password
 ```
 
 ### 运行
@@ -59,7 +86,7 @@ database:
 
 - 编程语言：Go
 - UI 框架：Bubbletea (charmbracelet)
-- 数据库：SQLite3 / MySQL
+- 数据库：SQLite3 / MySQL / PostgreSQL
 - 优化算法：布隆过滤器 (Bloom Filter)
 
 ## 许可证

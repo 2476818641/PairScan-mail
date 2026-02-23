@@ -41,11 +41,11 @@ func main() {
 	defer db.Close()
 
 	// ---------------------------------------------------------
-	// 步骤 3: (可选) 为远程 MySQL 初始化布隆过滤器
+	// 步骤 3: (可选) 为远程 MySQL/PostgreSQL 初始化布隆过滤器
 	// 通过内存中的布隆过滤器减少数据库查询次数
 	// ---------------------------------------------------------
 	var bloomFilter *bloom.BloomFilter
-	if cfg.Database.UseRemoteMySQL {
+	if cfg.Database.UseRemoteMySQL() || cfg.Database.UseRemotePostgreSQL() {
 		bloomFilter, err = bloomsetup.Initialize(db)
 		if err != nil {
 			fmt.Printf("布隆过滤器初始化失败: %v\n", err)

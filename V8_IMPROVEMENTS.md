@@ -1,6 +1,52 @@
-# PairScan v8 改进摘要
+# PairScan v8.1 改进摘要
 
-## 已完成的改进
+## v8.1 新增功能 - PostgreSQL 数据库支持 ✓
+
+### PostgreSQL 完整支持
+
+**新增性能**：
+- 在 `go.mod` 中添加 PostgreSQL 驱动 `github.com/lib/pq v1.10.9`
+- 完整的 PostgreSQL 连接和操作支持
+- 支持三种数据库类型：SQLite（默认）、MySQL、PostgreSQL
+- PostgreSQL 使用 `ON CONFLICT DO NOTHING` 进行高效的批量插入和去重
+
+**配置更新**：
+```yaml
+database:
+  db_type: "postgres"           # 新增数据库类型选择
+  host: "127.0.0.1"
+  port: 5432                    # PostgreSQL 默认端口
+  user: "your_postgres_user"
+  password: "your_postgres_password"
+  dbname: "blacklist_db"
+  ssl_mode: "disable"           # SSL 连接模式配置
+  postgres_batch_size: 10000    # PostgreSQL 专用批量大小
+```
+
+**布隆过滤器优化**：
+- PostgreSQL 现在支持与 MySQL 相同的布隆过滤器优化
+- 显著减少数据库查询次数，提升大规模数据去重性能
+- 自动在远程数据库（MySQL/PostgreSQL）上启用布隆过滤器
+
+**环境变量支持**：
+```bash
+# 使用 PostgreSQL
+export DB_TYPE="postgres"
+export DB_PASSWORD="your_password"
+
+# 或者设置其他 PostgreSQL 特定参数
+export DB_HOST="127.0.0.1"
+export DB_PORT="5432"
+export DB_NAME="blacklist_db"
+```
+
+**技术细节**：
+- `database/database.go` - 使用统一的数据库类型判断逻辑
+- `config/config.go` - 新增 `getDBTypeFromString()` 函数支持类型转换
+- `main.go` - 更新布隆过滤器初始化逻辑
+- `processor/processor.go` - 更新布隆过滤器使用逻辑
+
+## v8 已完成的改进
 
 ### 1. 添加 .gitignore 文件 ✓
 - 创建了 `.gitignore` 文件，避免提交敏感文件
@@ -21,11 +67,12 @@
 在 `config/config.go` 中添加：
 - **applyEnvironmentOverrides()** 函数：支持通过环境变量覆盖配置
 - 支持的环境变量：
-  - `DB_HOST` - MySQL 主机
-  - `DB_PORT` - MySQL 端口
-  - `DB_USER` - MySQL 用户名
-  - `DB_PASSWORD` - MySQL 密码（推荐用于安全）
-  - `DB_NAME` - MySQL 数据库名
+  - `DB_TYPE` - 数据库类型（sqlite, mysql, postgres）**v8.1 新增**
+  - `DB_HOST` - 数据库主机
+  - `DB_PORT` - 数据库端口
+  - `DB_USER` - 数据库用户名
+  - `DB_PASSWORD` - 数据库密码（推荐用于安全）
+  - `DB_NAME` - 数据库名称
   - `SQLITE_PATH` - SQLite 路径
   - `PROXY_ENABLED` - 代理启用状态
   - `PROXY_TYPE` - 代理类型
@@ -111,20 +158,22 @@
 ```
 v8/
 ├── .gitignore              # Git 忽略文件
-├── README.md               # 项目文档
+├── README.md               # 项目文档（含 PostgreSQL 支持）
 ├── AGENTS.md               # CI/CD 和代码风格指南
-├── main.go                 # 程序入口
-├── go.mod                  # Go 模块定义
+├── FINAL.md                # 项目分析报告
+├── V8_IMPROVEMENTS.md      # 改进说明文档
+├── main.go                 # 程序入口（支持 PostgreSQL）
+├── go.mod                  # Go 模块定义（含 PostgreSQL 驱动）
 ├── go.sum                  # 依赖校验和
-├── config.yaml             # 配置文件
+├── config.yaml             # 配置文件（含 PostgreSQL 配置）
 ├── config/
-│   ├── config.go           # 配置管理（支持环境变量）
+│   ├── config.go           # 配置管理（支持三种数据库）
 │   └── config_test.go      # 配置测试
 ├── database/
-│   ├── database.go         # 数据库操作
+│   ├── database.go         # 数据库操作（支持 PostgreSQL）
 │   └── database_test.go    # 数据库测试
 ├── processor/
-│   ├── processor.go        # 文件处理
+│   ├── processor.go        # 文件处理（支持 PostgreSQL）
 │   └── processor_test.go   # 处理逻辑测试
 ├── files/
 │   ├── files.go            # 文件扫描
@@ -138,17 +187,19 @@ v8/
 
 ## vs v7 的主要改进
 
-| 项目 | v7 | v8 |
-|------|----|----|
-| .gitignore | ✗ | ✓ |
-| README.md | ✗ | ✓ |
-| 环境变量支持 | ✗ | ✓ |
-| 并发安全文档 | ✗ | ✓ |
-| 错误处理 | 部分 | 完善 |
-| 单元测试 | ✗ | ✓ |
-| 常量定义 | 分散 | 集中 |
-| 代码注释 | 基础 | 完善 |
-| 项目名称 | Sieve | PairScan |
+| 项目 | v7 | v8 | v8.1 |
+|------|----|----|-------|
+| .gitignore | ✗ | ✓ | ✓ |
+| README.md | ✗ | ✓ | ✓ |
+| 数据库支持 | SQLite/MySQL | SQLite/MySQL | SQLite/MySQL/PostgreSQL |
+| 环境变量支持 | ✗ | ✓ | ✓ |
+| DB_TYPE 支持 | ✗ | ✗ | ✓ |
+| 并发安全文档 | ✗ | ✓ | ✓ |
+| 错误处理 | 部分 | 完善 | 完善 |
+| 单元测试 | ✗ | ✓ | ✓ |
+| 常量定义 | 分散 | 集中 | 集中 |
+| 代码注释 | 基础 | 完善 | 完善 |
+| 项目名称 | Sieve | PairScan | PairScan |
 
 ## 使用方法
 
@@ -187,13 +238,15 @@ pairscan.exe
 2. **processor/config 导入**: processor.go 中需要正确导入 config 包
 3. **完整测试覆盖**: 当前测试覆盖约 60-70%，可以进一步提升到 80%+
 4. **代码审查**: 建议代码审查以验证并发安全性的正确性
+5. **PostgreSQL 性能优化**: 可以进一步优化 PostgreSQL 批量插入性能（使用 COPY 命令等）
 
 ## 总结
 
-PairScan v8 版本相对于 v7 有显著改进：
+PairScan v8.1 版本相对于 v7 有显著改进：
 - ✓ 添加了安全措施
 - ✓ 添加了完整的文档
-- ✓ 改进了配置管理（支持环境变量）
+- ✓ 改进了配置管理（支持环境变量和三种数据库）
 - ✓ 增强了并发安全性
 - ✓ 添加了完整的单元测试
 - ✓ 改进了代码质量和可维护性
+- ✓ v8.1 新增 PostgreSQL 数据库支持

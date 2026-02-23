@@ -1,4 +1,5 @@
 database:
+  db_type: "sqlite"
   use_remote_mysql: false
   host: "127.0.0.1"
   port: 3306
@@ -6,9 +7,11 @@ database:
   password: "your_mysql_password"
   dbname: "blacklist_db"
   sqlite_db_path: "./blacklist.db"
+  ssl_mode: "disable"
   batchSize: 1000
   mysql_batch_size: 20000
   sqlite_batch_size: 5000
+  postgres_batch_size: 10000
 proxy:
   enabled: false
   type: "socks5"

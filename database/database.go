@@ -13,6 +13,7 @@ import (
 	"PairScan/config"
 
 	mySQLDriver "github.com/go-sql-driver/mysql"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/net/proxy"
 )
@@ -23,8 +24,10 @@ func Init(cfg config.Config) (*sql.DB, error) {
 	var err error
 	dbCfg := cfg.Database
 
-	if dbCfg.UseRemoteMySQL {
-		// 如果启用了 SOCKS5 代理，则配置代理拨号器
+	dbType := dbCfg.GetDBType()
+
+	switch dbType {
+	case config.DBTypeMySQL:
 		if cfg.Proxy.Enabled && cfg.Proxy.Type == "socks5" {
 			dialer, err := proxy.SOCKS5("tcp", cfg.Proxy.Address, nil, proxy.Direct)
 			if err != nil {
@@ -34,25 +37,34 @@ func Init(cfg config.Config) (*sql.DB, error) {
 				return dialer.Dial("tcp", addr)
 			})
 		}
-		// 组装 MySQL 连接字符串 (DSN)
 		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local&compress=true",
 			dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, dbCfg.DBName)
 		db, err = sql.Open("mysql", dsn)
 		if err != nil {
 			return nil, fmt.Errorf("连接MySQL失败: %w", err)
 		}
-		// 如果表不存在则创建
 		createTableSQL := `CREATE TABLE IF NOT EXISTS blacklist (pair VARCHAR(512) PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
 		_, err = db.Exec(createTableSQL)
 		if err != nil {
 			return nil, fmt.Errorf("在MySQL中创建表失败: %w", err)
 		}
 		fmt.Println("成功连接到 MySQL。")
-	} else {
-		// 使用 SQLite，并开启 WAL 模式及性能优化参数：
-		// _journal_mode=WAL: 提高并发读写性能
-		// _synchronous=NORMAL: 减少磁盘同步频率
-		// _cache_size=-20000: 设置约 20MB 的内存缓存
+
+	case config.DBTypePostgres:
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			dbCfg.Host, dbCfg.Port, dbCfg.User, dbCfg.Password, dbCfg.DBName, dbCfg.SSLMode)
+		db, err = sql.Open("postgres", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("连接PostgreSQL失败: %w", err)
+		}
+		createTableSQL := `CREATE TABLE IF NOT EXISTS blacklist (pair TEXT PRIMARY KEY);`
+		_, err = db.Exec(createTableSQL)
+		if err != nil {
+			return nil, fmt.Errorf("在PostgreSQL中创建表失败: %w", err)
+		}
+		fmt.Println("成功连接到 PostgreSQL。")
+
+	case config.DBTypeSQLite:
 		dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=-20000", dbCfg.SQLiteDBPath)
 		db, err = sql.Open("sqlite3", dsn)
 		if err != nil {
@@ -63,17 +75,19 @@ func Init(cfg config.Config) (*sql.DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("在SQLite中创建表失败: %w", err)
 		}
-		fmt.Println("成功连接到 本地SQLite 。")
+		fmt.Println("成功连接到 本地SQLite。")
+
+	default:
+		return nil, fmt.Errorf("未知的数据库类型: %s", dbType)
 	}
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("数据库Ping失败: %w", err)
 	}
 
-	// 配置连接池参数
-	db.SetMaxOpenConns(25)            // 最大打开连接数
-	db.SetMaxIdleConns(25)            // 最大空闲连接数
-	db.SetConnMaxLifetime(5 * time.Minute) // 连接最大生命周期
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	return db, nil
 }
@@ -100,8 +114,14 @@ func SaveNewPairsInBatches(db *sql.DB, cfg config.DBConfig, newPairs map[string]
 		return
 	}
 
-	stmtTpl := "INSERT IGNORE INTO blacklist (pair) VALUES "
-	if !cfg.UseRemoteMySQL {
+	dbType := cfg.GetDBType()
+	var stmtTpl string
+	switch dbType {
+	case config.DBTypeMySQL:
+		stmtTpl = "INSERT IGNORE INTO blacklist (pair) VALUES "
+	case config.DBTypePostgres:
+		stmtTpl = "INSERT INTO blacklist (pair) VALUES "
+	case config.DBTypeSQLite:
 		stmtTpl = "INSERT OR IGNORE INTO blacklist (pair) VALUES "
 	}
 
@@ -115,14 +135,20 @@ func SaveNewPairsInBatches(db *sql.DB, cfg config.DBConfig, newPairs map[string]
 			continue
 		}
 
-		// 构建批量插入的占位符
 		placeholders := strings.Repeat("(?),", len(batch)-1) + "(?)"
 		args := make([]interface{}, len(batch))
 		for j, v := range batch {
 			args[j] = v
 		}
 
-		_, err := tx.Exec(stmtTpl+placeholders, args...)
+		var fullSQL string
+		if dbType == config.DBTypePostgres {
+			fullSQL = stmtTpl + placeholders + " ON CONFLICT (pair) DO NOTHING"
+		} else {
+			fullSQL = stmtTpl + placeholders
+		}
+
+		_, err := tx.Exec(fullSQL, args...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\n批量插入数据失败: %v\n", err)
 			_ = tx.Rollback()

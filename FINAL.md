@@ -3,10 +3,12 @@
 ## 项目概况
 
 **项目名称**: PairScan（原Sieve）
-**版本**: v8
+**版本**: v8.1
 **项目位置**: `C:\Users\liuasd\Desktop\ago\sql-cl\v8`
 
 **项目功能**: 一个高效的邮箱:密码配对提取与去重工具，用于处理大量压缩文本文件（.txt, .gz, .xz, .zip），将提取的配对存储到数据库中并进行去重。
+
+**最新更新**: v8.1 版本添加 PostgreSQL 数据库支持
 
 ## 原项目 (v7) 发现的问题
 
@@ -48,6 +50,50 @@
 ### 8. 并发安全问题
 - ⚠️ 缺少并发安全说明
 - ⚠️ map操作的并发性不清晰
+
+## v8.1 改进内容（PostgreSQL 支持）
+
+### ✅ 新增 PostgreSQL 数据库支持
+
+**改进内容**：
+- 在 `go.mod` 中添加 PostgreSQL 驱动依赖 `github.com/lib/pq v1.10.9`
+- 在 `database/database.go` 中添加 PostgreSQL 连接逻辑，支持三种数据库类型
+- 修复批量插入函数，支持 PostgreSQL 的 `ON CONFLICT DO NOTHING` 语法
+- 添加 PostgreSQL 专用的批量大小配置 `postgres_batch_size`
+- 支持通过环境变量设置 `DB_TYPE` 来选择数据库类型
+
+**支持的环境变量**：
+```go
+DB_TYPE         - 数据库类型（sqlite, mysql, postgres）
+DB_HOST         - 数据库主机地址
+DB_PORT         - 数据库端口
+DB_USER         - 数据库用户名
+DB_PASSWORD     - 数据库密码（推荐）
+DB_NAME         - 数据库名称
+SQLITE_PATH     - SQLite 数据库路径
+PROXY_ENABLED   - 代理启用状态
+PROXY_TYPE      - 代理类型
+PROXY_ADDRESS   - 代理地址
+OUTPUT_LOG      - 输出日志文件路径
+```
+
+**配置示例**：
+```yaml
+database:
+  db_type: "postgres"           # 选择 PostgreSQL
+  host: "127.0.0.1"
+  port: 5432
+  user: "your_postgres_user"
+  password: "your_postgres_password"
+  dbname: "blacklist_db"
+  ssl_mode: "disable"          # SSL 模式
+  postgres_batch_size: 10000   # PostgreSQL 专用批量大小
+```
+
+**布隆过滤器支持**：
+- PostgreSQL 现在 MySQL 一样支持布隆过滤器优化
+- 在 `main.go` 和 `processor.go` 中已更新相关逻辑
+- 使用布隆过滤器可显著减少数据库查询次数，提升去重性能
 
 ## v8 改进内容
 

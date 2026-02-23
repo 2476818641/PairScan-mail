@@ -36,7 +36,7 @@ func isPotentialMatch(line string) bool {
 	if len(line) < 15 {
 		return false
 	}
-	// 必须包含 @ 符号 
+	// 必须包含 @ 符号
 	if strings.IndexByte(line, '@') == -1 {
 		return false
 	}
@@ -210,7 +210,7 @@ func processLineWorker(linesChan <-chan string, extractedPairsChan chan<- string
 }
 
 func collectAndFilter(extractedPairsChan <-chan string, cfg config.Config, db *sql.DB, bloomFilter *bloom.BloomFilter) {
-	if !cfg.Database.UseRemoteMySQL || bloomFilter == nil {
+	if (!cfg.Database.UseRemoteMySQL() && !cfg.Database.UseRemotePostgreSQL()) || bloomFilter == nil {
 		collectAndFilterOriginal(extractedPairsChan, cfg, db)
 		return
 	}

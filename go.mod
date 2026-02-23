@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/go-sql-driver/mysql v1.9.3
+	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/ulikunitz/xz v0.5.15
