@@ -1,6 +1,6 @@
-# v8
+# PairScan-mail
 
-PairScan 是一个高效的日志数据处理工具，专门用于扫描、解析和去重大型日志文件。
+PairScan-mail 是一个高效的邮件日志数据处理工具，专门用于扫描、解析和去重大型邮件日志文件。
 
 ## 功能特性
 
@@ -26,10 +26,10 @@ PairScan 是一个高效的日志数据处理工具，专门用于扫描、解�
 ### 安装
 
 ```bash
-git clone https://github.com/2476818641/v8.git
-cd v8
+git clone https://github.com/2476818641/PairScan-mail.git
+cd PairScan-mail
 go mod download
-go build -o v8
+go build -o PairScan-mail
 ```
 
 ### 配置
@@ -50,7 +50,7 @@ database:
 ### 运行
 
 ```bash
-./v8
+./PairScan-mail
 ```
 
 按提示选择处理模式并输入文件路径。
