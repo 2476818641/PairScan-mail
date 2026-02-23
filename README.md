@@ -91,4 +91,4 @@ set DB_PASSWORD=your_password
 
 ## 许可证
 
-MIT License
+[MIT License](https://opensource.org/licenses/MIT)
